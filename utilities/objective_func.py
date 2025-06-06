@@ -1,4 +1,4 @@
-from logistic_regression.utilities.problem_data import ProblemData
+from LogRegpy.utilities.problem_data import ProblemData
 from typing import Callable, List, Tuple
 
 

@@ -1,9 +1,10 @@
 from enum import Enum
 from typing import List, Optional
 from numbers import Number
-from logistic_regression.utilities.bounding_func import Bounder
-from logistic_regression.utilities.objective_func import Objective
-from logistic_regression.tree.node import Node
+from LogRegpy.utilities.bounding_func import Bounder
+from LogRegpy.utilities.objective_func import Objective
+from LogRegpy.utilities.variable_chooser import VariableChooser
+from LogRegpy.tree.node import Node
 from copy import deepcopy
 from numpy import argmax, argmin
 import math
@@ -17,21 +18,31 @@ class BranchStrategy(Enum):
 
 class Tree:
 
-    def __init__(self, n: int, k: int, obj: Objective) -> None:
+    def __init__(
+            self,
+            n: int,
+            k: int,
+            obj: Objective,
+            lower_bounder: Bounder,
+            var_select: VariableChooser,
+            branch_strategy: BranchStrategy = BranchStrategy.SHRINK
+            ) -> None:
         self.k: int = k
         self.n: int = n
         Node.k = k
         Node.n = n
         
         self.f0: Objective = obj
+        self.phi: Bounder = lower_bounder
+        self.next_var = var_select
         
         self.LB: float = -math.inf
         self.UB: float = math.inf
-        self.nodes: List[Node] = []
+        self.unexplored_internal_nodes: List[Node] = []
+        self.explored_internal_nodes: List[Node] = []
         self.feasible_leaves: List[Node] = []
-        self.branch_strategy: BranchStrategy = BranchStrategy.SHRINK
 
-        self.phi: Objective = obj
+        self.branch_strategy: BranchStrategy = branch_strategy
         
         ### Research Specific Objects ###
         self.known_fixed_in: Optional[List[int]] = None
@@ -43,21 +54,31 @@ class Tree:
         self._solution = None
         self.num_iter: int = 0
         self.UB_update_iterations: List[int] = []
+        self.LB_update_iterations: List[int] = []
         self.solve_time: float = 0 # total enumeration time
         self.lb_bound_time: float = 0
         self.ub_bound_time: float = 0
-        self.obj_time: float = 0 # total runtime of obj function
+        self.var_selection_time: float = 0
         self.initial_gap: float = math.inf
         self.initial_LB: float = -math.inf
         self.initial_UB: float = math.inf
 
     @property
     def gap(self):
-        return self.UB - self.LB 
+        return self.UB - self.LB
     
-    def solve(self, eps: Number=1e-8, timeout: Number=60, fixed_in_vars: List[int]=None,
-              fixed_out_vars: List[int]=None, var_scores: List[float]=None,
-              branch_strategy:str="shrink") -> bool:
+    @property
+    def bound_time(self) -> float:
+        return self.lb_bound_time + self.ub_bound_time
+    
+    def solve(self,
+              eps: Number = 1e-8,
+              timeout: Number = 60,
+              fixed_in_vars: List[int] = None,
+              fixed_out_vars: List[int] = None,
+              #var_scores: List[float] = None,
+              branch_strategy: str = "shrink"
+              ) -> bool:
         """Enumerate a branch and bound tree to solve the logistic regression problem to global
         optimality using the bounding and objective functions passed into the tree upon its
         construction.
@@ -69,14 +90,12 @@ class Tree:
         ----------
         eps: positive float, optional
             The desired optimality tolerance.
-            The default tolerance is 1e-3.
+            The default tolerance is 1e-8.
         timeout: float, optional
             The number of minutes solve will run before terminating.
             The default timeout is after 60 minutes.
         fixed_vars: List[int], optional
             Variable elements known to be fixed in (i.e. x[i] = 1 forall i in fixed_vars).
-        var_scores: List[float], optional
-            Scores used to determine variable branching priority.
         branch_strategy: str, optional
             The method for choosing subproblems in the tree.
             Defaults to depth first search (dfs). Any other input
@@ -111,10 +130,10 @@ class Tree:
         self.eps = eps
         self.timeout = timeout
 
-        # check if there are variable scores
-        if var_scores != None:
-            assert len(var_scores) == self.n, "there must be variable scores for all variables"
-            self.variable_scores = deepcopy(var_scores)
+        # # check if there are variable scores
+        # if var_scores != None:
+        #     assert len(var_scores) == self.n, "there must be variable scores for all variables"
+        #     self.variable_scores = deepcopy(var_scores)
 
         # check if there are fixed variables
         # create root node, gap, LB accordingly
@@ -137,7 +156,7 @@ class Tree:
         ######### MAIN #########
         
         print("Gap greater than epsilon:", self.gap > eps)
-        print(timeout > (loop_time / 60))
+        print("Timeout greater than loop time:", timeout > (loop_time / 60))
 
         while (self.gap > eps and timeout > (loop_time / 60)):
             self.num_iter += 1
@@ -149,10 +168,10 @@ class Tree:
 
             loop_time = time.time() - start_time
 
-            if (self.gap > eps and len(self.nodes) == 0):
+            if (self.gap > eps and len(self.unexplored_internal_nodes) == 0):
                 raise Exception("Node list is empty but GAP is unsatisfactory.")
             
-            print(f"Iteration {self.num_iter} | current UB = {self.UB} | Number of Open Subproblems = {len(self.nodes)}"
+            print(f"\033[KIteration {self.num_iter} | current UB = {self.UB} | current gap = {self.gap} | Number of Open Subproblems = {len(self.unexplored_internal_nodes)}"
                 + f" | Total Running Time = {loop_time} seconds ", end = "\r") 
         
         if (timeout < loop_time / 60):
@@ -163,26 +182,35 @@ class Tree:
         self._value = self.UB
         self._solution = min(self.feasible_leaves)
         self.solve_time = time.time() - start_time
+        print("\nFound global optimal. Runtime:", self.solve_time)
         return True
     
 
     def _create_root_node(self, fixed_in, fixed_out):
         root_node: Node = Node(fixed_in, fixed_out)
         
-        root_node.lb, root_obj_time = self.phi(root_node.fixed_out)
-        self.lb_bound_time += root_obj_time
-        
-        self.LB = root_node.lb
-        if root_node.is_feasible():
+        if root_node.is_feasible:
+            root_node.lb, root_obj_time = self.phi(root_node)
             self.UB = root_node.lb
+            self.ub_bound_time += root_obj_time
+            self.UB_update_iterations.append(self.num_iter)
+            self.feasible_leaves.append(root_node)
+        else:
+            root_node.lb, root_obj_time = self.phi(root_node)
+            self.unexplored_internal_nodes.append(root_node)
+
+        self.LB = root_node.lb
+        self.lb_bound_time += root_obj_time
+        self.LB_update_iterations.append(self.num_iter)
+
         self.initial_gap = self.UB - self.LB
-        self.nodes.append(root_node)
+
     
     def _choose_subproblem(self) -> Node:
         if self.branch_strategy == BranchStrategy.SHRINK:
-            return self.nodes.pop(argmin(self.nodes))
+            return self.unexplored_internal_nodes.pop(argmin(self.unexplored_internal_nodes))
         else:
-            return self.nodes.pop()
+            return self.unexplored_internal_nodes.pop()
 
     def _split_problem(self, node: Node):
         """
@@ -207,19 +235,9 @@ class Tree:
         2. node is a terminal leaf node -> doesn't get added to L_k to begin with.
         
         """
-        # TODO (later): add functionality for random branching
 
-        # var_scores_prime = self._create_var_scores_prime(node)
-        # chosen_var = argmin(var_scores_prime)
-
-        # # print("BRANCHING VAR: ", chosen_var) # DEBUG
-        # # print("VAR SCORES PRIME", var_scores_prime)
-
-        chosen_var = None
-        for num in range(Node.n):
-            if num not in node.fixed_in and num not in node.fixed_out:
-                chosen_var = num
-                break
+        chosen_var, var_choice_time = self.next_var(node)
+        self.var_selection_time += var_choice_time
 
         if chosen_var is not None:
             self._create_left_subproblem(node, chosen_var)
@@ -227,37 +245,9 @@ class Tree:
         else:
             raise Exception("Branching code ran into an unexpected case") # TODO: add information here, i.e. print something
         
-        self.LB = min(self.nodes).lb
+        self.LB = min(self.unexplored_internal_nodes + self.feasible_leaves).lb
         self.LB_update_iterations.append(self.num_iter)
-        print("LB UPDATED")
 
-    # def _create_var_scores_prime(self, node: Node) -> List[float]:
-    #     """
-    #     use math.inf since we branch on least score 
-
-    #     ensure that the var scores computed by the variable fixing algorithm
-    #     cannot achieve math.inf
-
-    #     TODO: TEST THIS.
-    #     """
-    #     to_return = []
-        
-    #     if node.is_x_terminal_leaf:
-    #         to_return = [math.inf if i < self.n1 else self.variable_scores[i]
-    #                 for i in range(self.n1 + self.n2)]
-    #     elif node.is_y_terminal_leaf:
-    #         to_return = [math.inf if i >= self.n1 else self.variable_scores[i]
-    #                 for i in range(self.n1 + self.n2)]
-    #     else:
-    #         to_return = deepcopy(self.variable_scores)
-            
-    #     for index in node.fixed_out:
-    #         to_return[index] = math.inf
-        
-    #     for index in node.fixed_in:
-    #         to_return[index] = math.inf
-
-    #     return to_return
 
     def _create_left_subproblem(self, node: Node, branch_idx: int) -> None:
         """
@@ -287,14 +277,13 @@ class Tree:
         # to return bound val, bounding time respectively.
 
         if node.is_terminal_leaf:
-            node.lb, bound_time = self.phi(node.fixed_out)
-            self.obj_time += bound_time
+            node.lb, bound_time = self.phi(node)
+            self.ub_bound_time += bound_time
             self.feasible_leaves.append(node)
             if node.lb < self.UB:
                 self.UB = node.lb
                 self.UB_update_iterations.append(self.num_iter)
-                print("UB UPDATED")
         else:
-            node.lb, bound_time = self.phi(node.fixed_out)
-            self.obj_time += bound_time
-            self.nodes.append(node)
+            node.lb, bound_time = self.phi(node)
+            self.lb_bound_time += bound_time
+            self.unexplored_internal_nodes.append(node)

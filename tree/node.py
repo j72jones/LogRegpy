@@ -1,8 +1,8 @@
 from typing import List
 import math
 from functools import cached_property
-
-from numpy import (setdiff1d)
+from numpy import setdiff1d, ndarray
+from typing import Optional
 
 class Node:
     num_instances: int = 0
@@ -18,6 +18,7 @@ class Node:
         self.fixed_out: List[int] = fixed_out
 
         self._lb: float = math.inf # also is obj_val if this is a terminal leaf node
+        self.model = None
 
     def __eq__(self, other):
         return self._lb == other._lb
@@ -45,7 +46,7 @@ class Node:
 
     @property
     def is_feasible(self) -> bool:
-        if len(self.fixed_out) >= Node.k:
+        if len(self.fixed_out) >= Node.n - Node.k:
             return True
         else:
             return False
@@ -53,10 +54,10 @@ class Node:
     @property
     def is_terminal_leaf(self) -> bool:
         if len(self.fixed_out) == Node.n - Node.k:
-            self.fixed_in = range(Node.n) - self.fixed_out
+            self.fixed_in = setdiff1d(range(Node.n), self.fixed_out)
             return True
         elif len(self.fixed_in) == Node.k:
-            self.fixed_out = range(Node.n) - self.fixed_in
+            self.fixed_out = setdiff1d(range(Node.n), self.fixed_in)
             return True
         else:
             return False

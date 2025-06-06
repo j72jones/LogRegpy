@@ -6,4 +6,5 @@ class ProblemData():
         self.y: np.ndarray = y
         self.n: int = X.shape[1]
         self.k: int = k
-        assert k <= self.n, 'k must be less than the number of attributes'
+        assert k <= self.n, 'k must be less than or equal to the number of attributes'
+        assert k >= 1, 'k must be positive'

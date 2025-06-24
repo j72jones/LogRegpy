@@ -4,6 +4,8 @@ from numbers import Number
 from LogRegpy.utilities.bounding_func import Bounder
 from LogRegpy.utilities.objective_func import Objective
 from LogRegpy.utilities.variable_chooser import VariableChooser
+from LogRegpy.utilities.upper_bounding_func import UpperBounder
+from LogRegpy.tests.test_logger import TestLogger
 from LogRegpy.tree.node import Node
 from copy import deepcopy
 from numpy import argmax, argmin
@@ -25,7 +27,9 @@ class Tree:
             obj: Objective,
             lower_bounder: Bounder,
             var_select: VariableChooser,
-            branch_strategy: BranchStrategy = BranchStrategy.SHRINK
+            branch_strategy: BranchStrategy = BranchStrategy.SHRINK,
+            initial_upper_bound_strategy: UpperBounder = None,
+            test_logger: TestLogger = None
             ) -> None:
         self.k: int = k
         self.n: int = n
@@ -35,6 +39,7 @@ class Tree:
         self.f0: Objective = obj
         self.phi: Bounder = lower_bounder
         self.next_var = var_select
+        self.initial_upper_bounder = initial_upper_bound_strategy
         
         self.LB: float = -math.inf
         self.UB: float = math.inf
@@ -47,6 +52,8 @@ class Tree:
         ### Research Specific Objects ###
         self.known_fixed_in: Optional[List[int]] = None
         self.variable_scores: Optional[List[float]] = None
+
+        self.test_logger = test_logger
         
         ### Framework Metrics ###
         self._status: Optional[str] = None
@@ -135,6 +142,16 @@ class Tree:
         #     assert len(var_scores) == self.n, "there must be variable scores for all variables"
         #     self.variable_scores = deepcopy(var_scores)
 
+        if self.initial_upper_bounder != None:
+            self.initial_UB, initial_ub_time, ub_fixed_in = self.initial_upper_bounder()
+            self.UB = self.initial_UB
+            initial_ub_node: Node = Node(ub_fixed_in, [])
+            initial_ub_node.lb = self.initial_UB
+            self.feasible_leaves.append(initial_ub_node)
+            self.ub_bound_time += initial_ub_time
+            print("Checking initial upper bound is feasible:", initial_ub_node.is_terminal_leaf)
+            
+
         # check if there are fixed variables
         # create root node, gap, LB accordingly
         fixed_in_0, fixed_out_0 = [], []
@@ -147,8 +164,14 @@ class Tree:
             for i in range(len(fixed_out_vars)):
                 assert isinstance(fixed_out_vars[i], int), "the fixed_out_vars list must contain integers."
             fixed_out_0 = deepcopy(fixed_out_vars)
-        
+
         self._create_root_node(fixed_in_0, fixed_out_0)
+
+        print(f"Setup complete | current UB = {self.UB} | current gap = {self.gap} | Number of Open Subproblems = {len(self.unexplored_internal_nodes)}"
+                + f" | Total Running Time = {(time.time() - start_time):.3f} seconds") 
+        
+        if self.test_logger != None:
+            self.test_logger.log(0, time.time() - start_time, self.UB, self.LB, len(self.unexplored_internal_nodes))
 
         ######### SETUP END #########
 
@@ -159,6 +182,10 @@ class Tree:
         print("Timeout greater than loop time:", timeout > (loop_time / 60))
 
         while (self.gap > eps and timeout > (loop_time / 60)):
+            # Pruning
+            if self.UB_update_iterations and self.UB_update_iterations[-1] == self.num_iter:
+                self.unexplored_internal_nodes = [x for x in self.unexplored_internal_nodes if x.lb < self.UB]
+
             self.num_iter += 1
             node: Node = self._choose_subproblem()
 
@@ -172,10 +199,13 @@ class Tree:
                 raise Exception("Node list is empty but GAP is unsatisfactory.")
             
             print(f"\033[KIteration {self.num_iter} | current UB = {self.UB} | current gap = {self.gap} | Number of Open Subproblems = {len(self.unexplored_internal_nodes)}"
-                + f" | Total Running Time = {loop_time} seconds ", end = "\r") 
+                + f" | Total Running Time = {loop_time} seconds", end = "\r") 
+            if self.test_logger != None:
+                self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(self.unexplored_internal_nodes))
         
-        if (timeout < loop_time / 60):
+        if (timeout < loop_time / 60):            
             self._status = "solve timed out."
+            print("\nSolve timed out. Runtime:", time.time() - start_time)
             return False
         
         self._status = "global optimal found."
@@ -189,7 +219,7 @@ class Tree:
     def _create_root_node(self, fixed_in, fixed_out):
         root_node: Node = Node(fixed_in, fixed_out)
         
-        if root_node.is_feasible:
+        if root_node.is_terminal_leaf:
             root_node.lb, root_obj_time = self.phi(root_node)
             self.UB = root_node.lb
             self.ub_bound_time += root_obj_time
@@ -245,6 +275,14 @@ class Tree:
         else:
             raise Exception("Branching code ran into an unexpected case") # TODO: add information here, i.e. print something
         
+        # lb_node = min(self.unexplored_internal_nodes + self.feasible_leaves)
+        # if lb_node.lb < self.LB:
+        #     print("\n\nPROBLEM:", lb_node.fixed_out, self.lb_node.fixed_out)
+        
+        # self.lb_node = lb_node
+
+        # self.LB = self.lb_node.lb
+
         self.LB = min(self.unexplored_internal_nodes + self.feasible_leaves).lb
         self.LB_update_iterations.append(self.num_iter)
 
@@ -277,7 +315,7 @@ class Tree:
         # to return bound val, bounding time respectively.
 
         if node.is_terminal_leaf:
-            node.lb, bound_time = self.phi(node)
+            node.lb, bound_time = self.f0(node)
             self.ub_bound_time += bound_time
             self.feasible_leaves.append(node)
             if node.lb < self.UB:
@@ -286,4 +324,5 @@ class Tree:
         else:
             node.lb, bound_time = self.phi(node)
             self.lb_bound_time += bound_time
-            self.unexplored_internal_nodes.append(node)
+            if node.lb < self.UB:
+                self.unexplored_internal_nodes.append(node)

@@ -18,7 +18,7 @@ class Node:
         self.fixed_out: List[int] = fixed_out
 
         self._lb: float = math.inf # also is obj_val if this is a terminal leaf node
-        self.model = None
+        self.coefs = None
 
     def __eq__(self, other):
         return self._lb == other._lb
@@ -44,12 +44,12 @@ class Node:
     def fixed_out_full(self) -> bool:
         return len(self.fixed_in) == Node.n - Node.k
 
-    @property
-    def is_feasible(self) -> bool:
-        if len(self.fixed_out) >= Node.n - Node.k:
-            return True
-        else:
-            return False
+    # @property
+    # def is_feasible(self) -> bool:
+    #     if len(self.fixed_out) >= Node.n - Node.k:
+    #         return True
+    #     else:
+    #         return False
         
     @property
     def is_terminal_leaf(self) -> bool:

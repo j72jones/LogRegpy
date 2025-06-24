@@ -28,22 +28,21 @@ print("Goal features:", k)
 
 
 problem_data = ProblemData(dataset_collector.X, dataset_collector.y, k)
-test_logger_ins = TestLogger("LogRegpy/tests/test_ionosphere_mosek_mosek_mostFractional_None_24.csv")
-test_logger_ins.rewrite_file()
+# test_logger_ins = TestLogger("LogRegpy/tests/test_ionosphere_mosek_mosek_fractional_None_24.csv")
+# test_logger_ins.rewrite_file()
 
 test_tree = Tree(
     problem_data.n, 
     problem_data.k, 
     Objective(problem_data, MosekObjectiveEval()),
     Bounder(problem_data, MosekObjectiveEval()),
-    VariableChooser(problem_data),
-    initial_upper_bound_strategy=None,
-    test_logger=test_logger_ins
+    Fractional(problem_data, method="least"),
+    initial_upper_bound_strategy=None
     )
 
 print("Successful test:", test_tree.solve(timeout = 5))
 
-print(len(min(test_tree.feasible_leaves).fixed_out))
+#print(len(min(test_tree.feasible_leaves).fixed_out))
 
 # To run:
-# python -m LogRegpy.tests.test_6_jun_2025
+# python -m LogRegpy.tests.sample_test

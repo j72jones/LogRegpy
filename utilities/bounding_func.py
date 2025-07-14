@@ -12,8 +12,8 @@ class Bounder:
         self.data = data
         self.bounding_func = proposed_func
 
-    def __call__(self, node: Node) -> Tuple[float, float]:
-        return self.bounding_func(self.data, node)
+    def __call__(self, node: Node, prev_coefs=None) -> Tuple[float, float]:
+        return self.bounding_func(self.data, node, prev_coefs=prev_coefs)
     
     def _test_func(proposed_func):
         pass

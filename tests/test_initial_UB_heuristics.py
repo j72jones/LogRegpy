@@ -12,6 +12,7 @@ from LogRegpy.variable_choice_heuristics.fractional import Fractional
 from LogRegpy.variable_choice_heuristics.maximum_bound_tightening import MaximumBoundTightening
 from LogRegpy.tests.datasets.dataset_collector import DatasetCollector
 from LogRegpy.initial_upper_bound_heuristics.stepwise_regression import StepwiseRegression
+from LogRegpy.initial_upper_bound_heuristics.variable_flooring import VariableFlooring
 from LogRegpy.tests.test_logger import TestLogger
 
 dataset_collector = DatasetCollector()
@@ -27,6 +28,10 @@ print("Goal features:", k)
 problem_data = ProblemData(dataset_collector.X, dataset_collector.y, k)
 
 heuristics = {
+    "Variable Flooring l2": VariableFlooring(problem_data, "l2"),
+    "Variable Flooring l1": VariableFlooring(problem_data, "l1"),
+    #"Variable Flooring Elasticnet": VariableFlooring(problem_data, "elasticnet"),
+    "Variable Flooring No Penalty": VariableFlooring(problem_data, None),
     "Backward Stepwise Regression": StepwiseRegression(problem_data, "backward"),
     "Forward Stepwise Regression": StepwiseRegression(problem_data),
     "No Heuristic": None

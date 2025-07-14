@@ -38,7 +38,8 @@ for solver in ("lbfgs", "MOSEK", "newton-cg", "newton-cholesky", "sag", "saga"):
             Bounder(problem_data, MosekObjectiveEval()),
             Fractional(problem_data, method = "least"),
             initial_upper_bound_strategy=None,
-            test_logger=test_logger_ins
+            test_logger=test_logger_ins,
+            lower_bounder_fixed_in_agnostic=True
             )
     else:
         test_tree = Tree(

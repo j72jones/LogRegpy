@@ -27,6 +27,7 @@ class Tree:
             obj: Objective,
             lower_bounder: Bounder,
             var_select: VariableChooser,
+            lower_bounder_fixed_in_agnostic = False,
             branch_strategy: BranchStrategy = BranchStrategy.SHRINK,
             initial_upper_bound_strategy: UpperBounder = None,
             test_logger: TestLogger = None
@@ -38,14 +39,17 @@ class Tree:
         
         self.f0: Objective = obj
         self.phi: Bounder = lower_bounder
+        self.phi_fixed_in_agnostic = lower_bounder_fixed_in_agnostic
         self.next_var = var_select
         self.initial_upper_bounder = initial_upper_bound_strategy
         
         self.LB: float = -math.inf
         self.UB: float = math.inf
         self.unexplored_internal_nodes: List[Node] = []
-        self.explored_internal_nodes: List[Node] = []
-        self.feasible_leaves: List[Node] = []
+        self.best_infeasible_nodes: dict[int: Node] = {}
+        self.number_infeasible_nodes_explored: int = 0
+        self.best_feasible_node: Node = None
+        self.number_feasible_nodes_explored: int = 0
 
         self.branch_strategy: BranchStrategy = branch_strategy
         
@@ -70,16 +74,24 @@ class Tree:
         self.initial_LB: float = -math.inf
         self.initial_UB: float = math.inf
 
+        self.initial_tree_size = self._subtree_size(0,0)
+        self.remaining_tree_size = self._subtree_size(0,0)
+
     @property
     def gap(self):
-        return self.UB - self.LB
+        if self.LB == -math.inf:
+            return math.inf
+        elif self.LB == 0:
+            return (self.UB - self.LB)
+        else:
+            return (self.UB - self.LB) / self.LB
     
     @property
     def bound_time(self) -> float:
         return self.lb_bound_time + self.ub_bound_time
     
     def solve(self,
-              eps: Number = 1e-8,
+              eps: Number = 0.01,
               timeout: Number = 60,
               fixed_in_vars: List[int] = None,
               fixed_out_vars: List[int] = None,
@@ -126,9 +138,6 @@ class Tree:
         start_time = time.time()
         loop_time = time.time() - start_time
 
-        if branch_strategy == "dfs":
-            self.branch_strategy: BranchStrategy = BranchStrategy.DFS
-
         assert isinstance(eps, Number), "eps must be a Number"
         assert eps > 0, "eps must be positive."
         assert isinstance(timeout, Number), "timeout must be a Number"
@@ -137,17 +146,13 @@ class Tree:
         self.eps = eps
         self.timeout = timeout
 
-        # # check if there are variable scores
-        # if var_scores != None:
-        #     assert len(var_scores) == self.n, "there must be variable scores for all variables"
-        #     self.variable_scores = deepcopy(var_scores)
-
         if self.initial_upper_bounder != None:
             self.initial_UB, initial_ub_time, ub_fixed_in = self.initial_upper_bounder()
             self.UB = self.initial_UB
             initial_ub_node: Node = Node(ub_fixed_in, [])
             initial_ub_node.lb = self.initial_UB
-            self.feasible_leaves.append(initial_ub_node)
+            self.best_feasible_node = initial_ub_node
+            self.number_feasible_nodes_explored += 1
             self.ub_bound_time += initial_ub_time
             print("Checking initial upper bound is feasible:", initial_ub_node.is_terminal_leaf)
             
@@ -167,11 +172,11 @@ class Tree:
 
         self._create_root_node(fixed_in_0, fixed_out_0)
 
-        print(f"Setup complete | current UB = {self.UB} | current gap = {self.gap} | Number of Open Subproblems = {len(self.unexplored_internal_nodes)}"
-                + f" | Total Running Time = {(time.time() - start_time):.3f} seconds") 
+        print(f"Setup complete | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(self.unexplored_internal_nodes)}"
+                + f" | Tree Remaining: {self.remaining_tree_size:,} | Running Time: {loop_time:.2f} seconds") 
         
         if self.test_logger != None:
-            self.test_logger.log(0, time.time() - start_time, self.UB, self.LB, len(self.unexplored_internal_nodes))
+            self.test_logger.log(0, time.time() - start_time, self.UB, self.LB, len(self.unexplored_internal_nodes), self.remaining_tree_size)
 
         ######### SETUP END #########
 
@@ -184,10 +189,17 @@ class Tree:
         while (self.gap > eps and timeout > (loop_time / 60)):
             # Pruning
             if self.UB_update_iterations and self.UB_update_iterations[-1] == self.num_iter:
-                self.unexplored_internal_nodes = [x for x in self.unexplored_internal_nodes if x.lb < self.UB]
+                unexplored_nodes = []
+                for x in self.unexplored_internal_nodes:
+                    if (x.lb - self.UB / x.lb) > eps:
+                        unexplored_nodes.append(x)
+                    else:
+                        self.remaining_tree_size -= self._subtree_size(len(x.fixed_in), len(x.fixed_out))
+                self.unexplored_internal_nodes = unexplored_nodes
 
             self.num_iter += 1
             node: Node = self._choose_subproblem()
+            self.remaining_tree_size -= 1
 
             # split problem handles updating UB and LB (if possible)
             # and handles adding the new subproblems to nodes and feasible_leaves
@@ -198,10 +210,10 @@ class Tree:
             if (self.gap > eps and len(self.unexplored_internal_nodes) == 0):
                 raise Exception("Node list is empty but GAP is unsatisfactory.")
             
-            print(f"\033[KIteration {self.num_iter} | current UB = {self.UB} | current gap = {self.gap} | Number of Open Subproblems = {len(self.unexplored_internal_nodes)}"
-                + f" | Total Running Time = {loop_time} seconds", end = "\r") 
+            print(f"\033[KIteration {self.num_iter} | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(self.unexplored_internal_nodes)}"
+                + f" | Tree Remaining: {self.remaining_tree_size:,} | Running Time: {loop_time:.2f} seconds", end = "\r") 
             if self.test_logger != None:
-                self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(self.unexplored_internal_nodes))
+                self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(self.unexplored_internal_nodes), self.remaining_tree_size)
         
         if (timeout < loop_time / 60):            
             self._status = "solve timed out."
@@ -210,7 +222,7 @@ class Tree:
         
         self._status = "global optimal found."
         self._value = self.UB
-        self._solution = min(self.feasible_leaves)
+        self._solution = self.best_feasible_node
         self.solve_time = time.time() - start_time
         print("\nFound global optimal. Runtime:", self.solve_time)
         return True
@@ -224,10 +236,13 @@ class Tree:
             self.UB = root_node.lb
             self.ub_bound_time += root_obj_time
             self.UB_update_iterations.append(self.num_iter)
-            self.feasible_leaves.append(root_node)
+            self.best_feasible_node = root_node
+            self.number_feasible_nodes_explored += 1
+            self.remaining_tree_size = 0
         else:
             root_node.lb, root_obj_time = self.phi(root_node)
             self.unexplored_internal_nodes.append(root_node)
+            self.best_infeasible_nodes[len(fixed_out)] = root_node
 
         self.LB = root_node.lb
         self.lb_bound_time += root_obj_time
@@ -282,8 +297,10 @@ class Tree:
         # self.lb_node = lb_node
 
         # self.LB = self.lb_node.lb
-
-        self.LB = min(self.unexplored_internal_nodes + self.feasible_leaves).lb
+        if self.unexplored_internal_nodes:
+            self.LB = min(min(self.unexplored_internal_nodes).lb, self.UB)
+        else:
+            self.LB = self.UB
         self.LB_update_iterations.append(self.num_iter)
 
 
@@ -296,7 +313,7 @@ class Tree:
         new_fixed_in = deepcopy(node.fixed_in) + [branch_idx]
         new_subproblem: Node = Node(new_fixed_in, node.fixed_out)
         
-        self._evaluate_node(new_subproblem)
+        self._evaluate_node(new_subproblem, previous_node=node, fixed_in_identical=True)
     
 
     def _create_right_subproblem(self, node: Node, branch_idx: int) -> None:
@@ -308,21 +325,38 @@ class Tree:
         new_fixed_out = deepcopy(node.fixed_out) + [branch_idx]
         new_subproblem: Node = Node(node.fixed_in, new_fixed_out)
         
-        self._evaluate_node(new_subproblem)
+        self._evaluate_node(new_subproblem, previous_node=node)
 
-    def _evaluate_node(self, node: Node) -> None:
+    def _evaluate_node(self, node: Node, previous_node=None, fixed_in_identical=False) -> None:
         # note that if you want generalilzation of bounding/obj functions then they need
         # to return bound val, bounding time respectively.
 
         if node.is_terminal_leaf:
+            self.remaining_tree_size -= 1
             node.lb, bound_time = self.f0(node)
             self.ub_bound_time += bound_time
-            self.feasible_leaves.append(node)
+            self.number_feasible_nodes_explored += 1
             if node.lb < self.UB:
+                self.best_feasible_node = node
                 self.UB = node.lb
                 self.UB_update_iterations.append(self.num_iter)
         else:
-            node.lb, bound_time = self.phi(node)
-            self.lb_bound_time += bound_time
+            if fixed_in_identical and self.phi_fixed_in_agnostic:
+                node.lb = previous_node.lb
+                node.coefs = previous_node.coefs
+            else:
+                if previous_node is not None:
+                    node.lb, bound_time = self.phi(node, prev_coefs=previous_node.coefs)
+                else:
+                    node.lb, bound_time = self.phi(node)
+                self.lb_bound_time += bound_time
+            if len(node.fixed_out) not in self.best_infeasible_nodes.keys() or self.best_infeasible_nodes[len(node.fixed_out)].lb > node.lb:
+                self.best_infeasible_nodes[len(node.fixed_out)] = node
             if node.lb < self.UB:
                 self.unexplored_internal_nodes.append(node)
+            else:
+                self.remaining_tree_size -= self._subtree_size(len(node.fixed_in), len(node.fixed_out))
+
+    def _subtree_size(self, fixed_in_len, fixed_out_len):
+        # Returns the size of the subtree starting at the root node specified
+        return 2 * math.comb(self.n - fixed_in_len - fixed_out_len, self.k - fixed_in_len) - 1

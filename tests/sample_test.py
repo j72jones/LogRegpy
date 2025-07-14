@@ -37,7 +37,8 @@ test_tree = Tree(
     Objective(problem_data, MosekObjectiveEval()),
     Bounder(problem_data, MosekObjectiveEval()),
     Fractional(problem_data, method="least"),
-    initial_upper_bound_strategy=None
+    initial_upper_bound_strategy=None,
+    lower_bounder_fixed_in_agnostic=True
     )
 
 print("Successful test:", test_tree.solve(timeout = 5))

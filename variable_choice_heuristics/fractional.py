@@ -29,8 +29,8 @@ class Fractional(VariableChooser):
             for i in range(Node.n):
                 if i not in node.fixed_out:
                     if i not in node.fixed_in:
-                        if coefs[j] / self.variances[i] < min_coef:
-                            min_coef = coefs[j] / self.variances[i]
+                        if np.abs(coefs[j] / self.variances[i]) < min_coef:
+                            min_coef = np.abs(coefs[j] / self.variances[i])
                             min_coef_index = i
                     j += 1
             return (min_coef_index, start_time - time.time())
@@ -40,8 +40,8 @@ class Fractional(VariableChooser):
             for i in range(Node.n):
                 if i not in node.fixed_out:
                     if i not in node.fixed_in:
-                        if coefs[j] / self.variances[i]  > max_coef:
-                            max_coef = coefs[j] / self.variances[i]
+                        if np.abs(coefs[j] / self.variances[i])  > max_coef:
+                            max_coef = np.abs(coefs[j] / self.variances[i])
                             max_coef_index = i
                     j += 1
             return (max_coef_index, start_time - time.time())

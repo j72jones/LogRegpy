@@ -31,7 +31,7 @@ for solver in solvers:
     print("\n\nRunning tests for", solver)
 
     for dataset in datasets:
-        if dataset != "IONOSPHERE":
+        if dataset != "MADELON":
             continue
 
         print("\n\nRunning tests for", dataset)

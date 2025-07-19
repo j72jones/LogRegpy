@@ -46,7 +46,6 @@ class Tree:
         self.LB: float = -math.inf
         self.UB: float = math.inf
         self.unexplored_internal_nodes: List[Node] = []
-        self.best_infeasible_nodes: dict[int: Node] = {}
         self.number_infeasible_nodes_explored: int = 0
         self.best_feasible_node: Node = None
         self.number_feasible_nodes_explored: int = 0
@@ -91,12 +90,13 @@ class Tree:
         return self.lb_bound_time + self.ub_bound_time
     
     def solve(self,
-              eps: Number = 0.01,
+              eps: Number = 0.0001,
               timeout: Number = 60,
               fixed_in_vars: List[int] = None,
               fixed_out_vars: List[int] = None,
               #var_scores: List[float] = None,
-              branch_strategy: str = "shrink"
+              branch_strategy: str = "shrink",
+              max_iter = 10000
               ) -> bool:
         """Enumerate a branch and bound tree to solve the logistic regression problem to global
         optimality using the bounding and objective functions passed into the tree upon its
@@ -186,12 +186,12 @@ class Tree:
         print("Gap greater than epsilon:", self.gap > eps)
         print("Timeout greater than loop time:", timeout > (loop_time / 60))
 
-        while (self.gap > eps and timeout > (loop_time / 60)):
+        while (self.gap > eps and timeout > (loop_time / 60) and self.num_iter <= max_iter):
             # Pruning
             if self.UB_update_iterations and self.UB_update_iterations[-1] == self.num_iter:
                 unexplored_nodes = []
                 for x in self.unexplored_internal_nodes:
-                    if (x.lb - self.UB / x.lb) > eps:
+                    if ((self.UB - x.lb)  / x.lb) > eps:
                         unexplored_nodes.append(x)
                     else:
                         self.remaining_tree_size -= self._subtree_size(len(x.fixed_in), len(x.fixed_out))
@@ -242,7 +242,6 @@ class Tree:
         else:
             root_node.lb, root_obj_time = self.phi(root_node)
             self.unexplored_internal_nodes.append(root_node)
-            self.best_infeasible_nodes[len(fixed_out)] = root_node
 
         self.LB = root_node.lb
         self.lb_bound_time += root_obj_time
@@ -346,12 +345,10 @@ class Tree:
                 node.coefs = previous_node.coefs
             else:
                 if previous_node is not None:
-                    node.lb, bound_time = self.phi(node, prev_coefs=previous_node.coefs)
+                    node.lb, bound_time = self.phi(node)
                 else:
                     node.lb, bound_time = self.phi(node)
                 self.lb_bound_time += bound_time
-            if len(node.fixed_out) not in self.best_infeasible_nodes.keys() or self.best_infeasible_nodes[len(node.fixed_out)].lb > node.lb:
-                self.best_infeasible_nodes[len(node.fixed_out)] = node
             if node.lb < self.UB:
                 self.unexplored_internal_nodes.append(node)
             else:

@@ -114,9 +114,7 @@ def logisticRegression(X, y, lamb=0.0):
 
         # Solution
         task.writedata('logistic.ptf')
-        print(time.time())
         task.optimize()
-        print(time.time())
         xx = task.getxxslice(soltype.itr, theta, theta+d)
 
         obj_val = task.getprimalobj(soltype.itr)

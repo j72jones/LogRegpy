@@ -12,7 +12,7 @@ class sklearn_objective_eval:
     def __init__(self, params: dict):
         self.params = params
 
-    def __call__(self, data: ProblemData, node: Node) -> Tuple[float, float]:
+    def __call__(self, data: ProblemData, node: Node, prev_coefs=None) -> Tuple[float, float]:
         start_time = time.time()
         attributes = setdiff1d(range(data.n), node.fixed_out)
         # Train the logistic regression model

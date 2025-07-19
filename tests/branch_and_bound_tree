@@ -1,0 +1,9 @@
+digraph {
+	A [label=Root fillcolor=lightblue style=filled]
+	B [label=Left fillcolor=lightgray style=filled]
+	C [label=Right fillcolor=lightgreen style=filled]
+	D [label="Right-Right" fillcolor=pink style=filled]
+	A -> B
+	A -> C
+	C -> D
+}

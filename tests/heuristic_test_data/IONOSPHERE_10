@@ -1,0 +1,7 @@
+Heuristic,UB,Time,Selected Variables
+Variable Flooring l2,185.08127654414028,0.08587026596069336,"[26, 0, 21, 10, 33, 11, 9, 12, 27, 31]"
+Variable Flooring No Penalty,167.92479163811046,0.04819202423095703,"[26, 0, 21, 10, 33, 11, 6, 9, 12, 27]"
+Backward Stepwise Regression No Penalty,119.0553561193059,22.416501998901367,"[0, 2, 4, 10, 13, 14, 21, 22, 25, 26]"
+Backward Stepwise Regression l2,119.0553561193059,23.572539806365967,"[0, 2, 4, 10, 13, 14, 21, 22, 25, 26]"
+Forward Stepwise Regression No Penalty,121.58459467812416,9.582461833953857,"[4, 26, 2, 21, 25, 28, 3, 0, 30, 7]"
+Forward Stepwise Regression l2,121.58459467812416,9.00715684890747,"[4, 26, 2, 21, 25, 28, 3, 0, 30, 7]"

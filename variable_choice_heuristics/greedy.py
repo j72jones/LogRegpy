@@ -12,7 +12,7 @@ import numpy as np
 class Greedy(VariableChooser):
     def __init__(self, data: ProblemData, method="min", penalty="l2", solver="saga") -> None:
         self.data = data
-        acceptable_methods = {"min", "max"}
+        acceptable_methods = {"min_in", "max_in", "min_out", "max_out"}
         if method not in acceptable_methods:
             raise ValueError(f"Invalid method: {method}. Must be one of {acceptable_methods}.")
         self.method = method
@@ -33,20 +33,39 @@ class Greedy(VariableChooser):
         self.penalty = penalty
         self.solver = solver
 
+        self.objectives: dict[frozenset, int] = {}
+
     def __call__(self, node: Node) -> Tuple[int, float]:
         start_time = time.time()
         best_var = None
-        if self.method == "min":
+        if self.method == "min_out":
             min_objective = math.inf
             for i in setdiff1d(list(range(self.data.n)), node.fixed_in + node.fixed_out):
                 objective = self.find_obj(setdiff1d(list(range(self.data.n)), node.fixed_out + [i]), penalty = self.penalty)
                 if objective < min_objective:
                     min_objective = objective
                     best_var = i
-        elif self.method == "max":
+        elif self.method == "max_out":
             max_objective = -math.inf
             for i in setdiff1d(list(range(self.data.n)), node.fixed_in + node.fixed_out):
                 objective = self.find_obj(setdiff1d(list(range(self.data.n)), node.fixed_out + [i]), penalty = self.penalty)
+                if objective > max_objective:
+                    max_objective = objective
+                    best_var = i
+        if self.method == "min_in":
+            min_objective = math.inf
+            for i in setdiff1d(list(range(self.data.n)), node.fixed_in + node.fixed_out):
+                current_set = frozenset(node.fixed_in + [i])
+                if current_set not in self.objectives.keys():
+                    self.objectives[current_set] = self.find_obj(node.fixed_in  + [i], penalty = self.penalty)
+                if self.objectives[current_set] < min_objective:
+                    min_objective = self.objectives[current_set]
+                    best_var = i
+            del self.objectives[frozenset(node.fixed_in + [i])]
+        elif self.method == "max_in":
+            max_objective = -math.inf
+            for i in setdiff1d(list(range(self.data.n)), node.fixed_in + node.fixed_out):
+                objective = self.find_obj(node.fixed_in  + [i], penalty = self.penalty)
                 if objective > max_objective:
                     max_objective = objective
                     best_var = i

@@ -54,11 +54,11 @@ class MosekLogisticModel:
             idx = self.theta_idx + j
             if j in fixed_out:
                 self.task.putvarbound(idx, boundkey.fx, 0.0, 0.0)
-                if prev_coef:
+                if prev_coef is not None:
                     theta_vec.append(0.0)
             else:
                 self.task.putvarbound(idx, boundkey.fr, -inf, inf)
-                if prev_coef:
+                if prev_coef is not None:
                     theta_vec.append(prev_coef.get(j, 0.0))
         
         if prev_coef is not None:

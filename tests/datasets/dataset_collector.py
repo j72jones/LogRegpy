@@ -10,6 +10,7 @@ class uciDatasetsPy(Enum):
     IONOSPHERE = 52
     WINE = 109
     MYOCARDIAL = 579
+    MUSK = 74
 
 uciFairDatasetsPy = {
     "ADULT": {
@@ -47,8 +48,11 @@ class DatasetCollector():
             # fetch dataset 
             dataset = fetch_ucirepo(id=uciDatasetsPy[dataset_name].value)
             # data (as pandas dataframes becomes np.ndarray) 
-            self.X = dataset.data.features.to_numpy()
-            self.y = dataset.data.targets.to_numpy().ravel()
+            self.X = dataset.data.features.fillna(0).to_numpy()
+            if dataset_name == "MYOCARDIAL":
+                self.y = dataset.data.targets["ZSN"].to_numpy().ravel()
+            else:
+                self.y = dataset.data.targets.to_numpy().ravel()
             unique_vals = np.unique(self.y)
             if len(unique_vals) != 2:
                 raise ValueError("Expected exactly two unique values")
@@ -114,4 +118,4 @@ if __name__ == "__main__":
     # print(classifier)
 
     dataset = fetch_ucirepo(id=579)
-    print(dataset.data.targets)
+    print(dataset.data.targets.columns)

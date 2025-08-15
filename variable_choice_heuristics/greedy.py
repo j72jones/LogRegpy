@@ -10,7 +10,7 @@ import time
 import numpy as np
 
 class Greedy(VariableChooser):
-    def __init__(self, data: ProblemData, method="min", penalty="l2", solver="saga") -> None:
+    def __init__(self, data: ProblemData, method="min", penalty="l2", solver="saga", writer=None) -> None:
         self.data = data
         acceptable_methods = {"min_in", "max_in", "min_out", "max_out"}
         if method not in acceptable_methods:
@@ -34,6 +34,8 @@ class Greedy(VariableChooser):
         self.solver = solver
 
         self.objectives: dict[frozenset, int] = {}
+        self.writer=writer
+        self.num_iter = 0
 
     def __call__(self, node: Node) -> Tuple[int, float]:
         start_time = time.time()
@@ -69,9 +71,13 @@ class Greedy(VariableChooser):
                 if objective > max_objective:
                     max_objective = objective
                     best_var = i
+        if self.writer is not None:
+            with open(self.writer, mode='a', newline='') as f:
+                f.write(f"{self.num_iter}\n")
         return (best_var, start_time - time.time())
 
     def find_obj(self, fixed_in, penalty):
+        self.num_iter += 1
         if self.solver == "MOSEK":
             x = self.data.X[:, fixed_in]
             _, obj = logisticRegression(x, self.data.y, lamb=1 if penalty == "l2" else 0)

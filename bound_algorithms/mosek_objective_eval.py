@@ -24,19 +24,23 @@ if __name__ == "__main__":
     dataset_collector = DatasetCollector()
     print("Successful data collection:", dataset_collector("MYOCARDIAL"))
     problem_data = ProblemData(dataset_collector.X, dataset_collector.y, 10)
-    # Node.n = 500
-    # Node.k =10
-    node_1 = Node([], [0,1,2,3,4,5,6,7,8])
+    print(dataset_collector.X.shape)
+    Node.n = 111
+    Node.k = 4
+    node_1 = Node([0, 1, 10, 28], [])
+    node_2 = Node([1, 5, 8, 9], [])
+    print(node_1.is_terminal_leaf)
+    print(node_2.is_terminal_leaf)
     # node_2 = Node([48, 204, 226, 296, 323, 424, 430, 431, 475, 481], [])
     # print(node_2.is_terminal_leaf)
     #print(dataset_collector.y)
     start_time = time.time()
 
-    my_eval = MosekObjectiveEval(problem_data)
+    my_eval = MosekObjectiveEval(problem_data, lamb=1)
     # print(my_eval(problem_data, node_1))
     # print(logisticRegression(problem_data.X[:,setdiff1d(range(problem_data.n), [0,1,2,3,4,5,6,7,8])], problem_data.y)[1])
-    print(my_eval(problem_data, node_1))
-    print()
+    print(my_eval(problem_data, node_1)[0])
+    print(my_eval(problem_data, node_2)[0])
 
     # python -m LogRegpy.bound_algorithms.mosek_objective_eval
 

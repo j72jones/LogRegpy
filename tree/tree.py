@@ -96,7 +96,8 @@ class Tree:
               fixed_out_vars: List[int] = None,
               #var_scores: List[float] = None,
               branch_strategy: str = "shrink",
-              max_iter = 10000
+              max_iter = 10000,
+              safe_close_file = None
               ) -> bool:
         """Enumerate a branch and bound tree to solve the logistic regression problem to global
         optimality using the bounding and objective functions passed into the tree upon its
@@ -215,15 +216,25 @@ class Tree:
             if self.test_logger != None:
                 self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(self.unexplored_internal_nodes), self.remaining_tree_size)
         
-        if (timeout < loop_time / 60):            
+        if (timeout < loop_time / 60) or self.num_iter > max_iter:            
             self._status = "solve timed out."
             print("\nSolve timed out. Runtime:", time.time() - start_time)
+            if safe_close_file is not None:
+                import json
+                with open(safe_close_file, mode='w') as f:
+                    json.dump({"UB": int(self.UB),
+                                "UB node": self.best_feasible_node.to_dict(),
+                                "iteration": int(self.num_iter),
+                                "eps": float(eps),
+                                "open_subproblems": [node.to_dict() for node in self.unexplored_internal_nodes]}, f)
             return False
         
         self._status = "global optimal found."
         self._value = self.UB
         self._solution = self.best_feasible_node
         self.solve_time = time.time() - start_time
+        if self.test_logger != None:
+                self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(self.unexplored_internal_nodes), self.remaining_tree_size)
         print("\nFound global optimal. Runtime:", self.solve_time)
         return True
     

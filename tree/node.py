@@ -10,15 +10,15 @@ class Node:
     k: int
     n: int
 
-    def __init__(self, fixed_in: List[int], fixed_out: List[int]) -> None:
+    def __init__(self, fixed_in: List[int], fixed_out: List[int], lb=math.inf, coefs=None) -> None:
         Node.num_instances += 1
         self.num_node = Node.num_instances # make sure this does what you think it does. TODO:unittest
 
         self.fixed_in: List[int] = fixed_in
         self.fixed_out: List[int] = fixed_out
 
-        self._lb: float = math.inf # also is obj_val if this is a terminal leaf node
-        self.coefs = None
+        self._lb: float = lb # also is obj_val if this is a terminal leaf node
+        self.coefs = coefs
 
     def __eq__(self, other):
         return self._lb == other._lb
@@ -61,3 +61,15 @@ class Node:
             return True
         else:
             return False
+
+    def __repr__(self):
+        return f"Node({repr(self.fixed_in)}, {repr(self.fixed_out)}, lb={repr(self.lb)})"
+    
+    def to_dict(self):
+        if self.lb != math.inf:
+            return {"fixed_in": [int(i) for i in self.fixed_in], "fixed_out": [int(i) for i in self.fixed_out], "lb": float(self.lb), "coefs": self.coefs}
+        else:
+            return {"fixed_in": [int(i) for i in self.fixed_in], "fixed_out": [int(i) for i in self.fixed_out]}
+        
+    def from_dict(passed_dict):
+        return Node(passed_dict["fixed_in"], passed_dict["fixed_out"], lb = passed_dict.get("lb", math.inf), coefs = passed_dict.get("coefs", None))

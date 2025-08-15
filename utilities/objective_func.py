@@ -11,6 +11,9 @@ class Objective:
         self.data = data
         self.obj_func = proposed_func
 
+    def create_model(self):
+        self.obj_func.create_model()
+
     def __call__(self, fixed_out: List[int]) -> Tuple[float, float]:
         return self.obj_func(self.data, fixed_out)
     

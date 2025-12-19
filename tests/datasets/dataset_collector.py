@@ -4,6 +4,7 @@ from sklearn.datasets import make_classification
 import numpy as np
 from scipy.sparse import lil_matrix
 import pandas as pd
+from typing import Optional
 
 class uciDatasetsPy(Enum):
     SPECT_HEART = 95
@@ -13,13 +14,6 @@ class uciDatasetsPy(Enum):
     MUSK = 74
     BANK_MARKETING = 222
 
-uciFairDatasetsPy = {
-    "ADULT": {
-        "ID": 2,
-        "FAIR CLASSIFIER": 'sex'
-    }
-}
-    
 
 
 uciDatasetsLocal = {
@@ -44,7 +38,12 @@ class DatasetCollector():
         self.n: int = None
         self.rows: int = None
     
-    def __call__(self, dataset_name: str) -> bool:
+    def __call__(self, dataset_name: str,
+                 n_samples: Optional[int] = 700,
+                 n_features: Optional[int] = 34,
+                 n_informative: Optional[int] = 5,
+                 n_redundant: Optional[int] = 22,
+                 random_state: Optional[int] = 42) -> bool:
         if dataset_name == "BANK_MARKETING":
             # fetch dataset 
             dataset = fetch_ucirepo(id=uciDatasetsPy[dataset_name].value)
@@ -81,26 +80,17 @@ class DatasetCollector():
                 self.y = dataset.data.targets["ZSN"].to_numpy().ravel()
             else:
                 self.y = dataset.data.targets.to_numpy().ravel()
+            X_mean = np.mean(self.X, axis=0, keepdims=True)
+            X_std = np.std(self.X, axis=0, keepdims=True)
+            X_std = np.where(X_std < 1e-6, 1.0, X_std)  # avoid divide-by-zero
+            self.X = (self.X - X_mean) / X_std
             unique_vals = np.unique(self.y)
             if len(unique_vals) != 2:
                 raise ValueError("Expected exactly two unique values")
             self.y = (self.y == unique_vals[1]).astype(int)
             self.rows, self.n = self.X.shape
             return True
-        
-        # if dataset_name in uciFairDatasetsPy.__members__:
-        #     # fetch dataset 
-        #     dataset = fetch_ucirepo(id=uciFairDatasetsPy[dataset_name].value)
-        #     # data (as pandas dataframes becomes np.ndarray) 
-        #     self.X = dataset.data.features.to_numpy()
-        #     self.y = dataset.data.targets.to_numpy().ravel()
-        #     unique_vals = np.unique(self.y)
-        #     if len(unique_vals) != 2:
-        #         raise ValueError("Expected exactly two unique values")
-        #     self.y = (self.y == unique_vals[1]).astype(int)
-        #     self.rows, self.n = self.X.shape
-        #     return True
-                
+                        
         elif dataset_name == "MADELON":
             self.X = np.loadtxt(uciDatasetsLocal[dataset_name]["data_file_path"])
             self.y = np.loadtxt(uciDatasetsLocal[dataset_name]["label_file_path"]).ravel()
@@ -120,30 +110,10 @@ class DatasetCollector():
             return True
         
         elif dataset_name == 'SYNTHETIC':
-            self.X, self.y = make_classification(n_samples=1000, n_features=5000, 
-                           n_informative=50, n_redundant=100, random_state=42)
+            self.X, self.y = make_classification(n_samples=n_samples, n_features=n_features, 
+                           n_informative=n_informative, n_redundant=n_redundant, random_state=random_state)
             self.rows, self.n = self.X.shape
             return True
         
         else:
             return False
-        
-
-
-if __name__ == "__main__":
-    # # fetch dataset 
-    # dataset = fetch_ucirepo(id=2)
-    # # data (as pandas dataframes becomes np.ndarray) 
-    # X = dataset.data.features
-    # classifier = X['sex']
-    # classifiers = classifier.unique()
-    # indices = {classs:  classifier.index[classifier['sex'] == classs].tolist() for classs in classifiers}
-    
-    # X = X.to_numpy()
-    # Q = None
-    # y = dataset.data.targets.to_numpy().ravel()
-    
-    # print(classifier)
-
-    dataset = fetch_ucirepo(id=579)
-    print(dataset.data.targets.columns)

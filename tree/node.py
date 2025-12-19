@@ -1,75 +1,91 @@
 from typing import List
 import math
-from functools import cached_property
-from numpy import setdiff1d, ndarray
-from typing import Optional
+from typing import Optional, Iterable
 
 class Node:
-    num_instances: int = 0
-
     k: int
     n: int
+    universal_varbitset: int
 
-    def __init__(self, fixed_in: List[int], fixed_out: List[int], lb=math.inf, coefs=None) -> None:
-        Node.num_instances += 1
-        self.num_node = Node.num_instances # make sure this does what you think it does. TODO:unittest
+    @classmethod
+    def configure(cls, *, n: int, k: int):
+        if not (0 <= k <= n):
+            raise ValueError("Require 0 ≤ k ≤ n")
 
-        self.fixed_in: List[int] = fixed_in
-        self.fixed_out: List[int] = fixed_out
+        cls.n = n
+        cls.k = k
+        cls.universal_varbitset = (1 << n) - 1
 
-        self._lb: float = lb # also is obj_val if this is a terminal leaf node
+    def __init__(self, fixed_in: int, fixed_out: int, lb=math.inf, coefs=None) -> None:
+        self.fixed_in: int = fixed_in
+        self.fixed_out: int = fixed_out
+
+        self.lb: float = lb
         self.coefs = coefs
-
-    def __eq__(self, other):
-        return self._lb == other._lb
     
     def __lt__(self, other):
-        return self._lb < other._lb
+        return self.lb < other.lb
     
     @property
-    def lb(self):
-        return self._lb
-    
-    @lb.setter
-    def lb(self, value):
-        self._lb = value
+    def len_fixed_in(self) -> int:
+        return self.fixed_in.bit_count()
+    @property
+    def len_fixed_out(self) -> int:
+        return self.fixed_out.bit_count()
 
-    # from here on I could use all cached properties...not of critical importance
-    
     @property
     def fixed_in_full(self) -> bool:
-        return len(self.fixed_in) >= Node.k
-    
+        return self.len_fixed_in >= Node.k
     @property
     def fixed_out_full(self) -> bool:
-        return len(self.fixed_in) == Node.n - Node.k
-
-    # @property
-    # def is_feasible(self) -> bool:
-    #     if len(self.fixed_out) >= Node.n - Node.k:
-    #         return True
-    #     else:
-    #         return False
+        return self.len_fixed_out >= Node.n - Node.k
         
-    @property
     def is_terminal_leaf(self) -> bool:
-        if len(self.fixed_out) == Node.n - Node.k:
-            self.fixed_in = setdiff1d(range(Node.n), self.fixed_out)
+        if self.fixed_out_full:
+            self.fixed_in = Node.universal_varbitset & ~self.fixed_out
+            if not self.fixed_in_full:
+                raise ValueError(f"Fixed out is overfilled: {self.fixed_out}")
             return True
-        elif len(self.fixed_in) == Node.k:
-            self.fixed_out = setdiff1d(range(Node.n), self.fixed_in)
+        elif self.fixed_in_full:
+            self.fixed_out = Node.universal_varbitset & ~self.fixed_in
+            if not self.fixed_out_full:
+                raise ValueError(f"Fixed in is overfilled: {self.fixed_in}")
             return True
         else:
             return False
+
+    def free_varbitset(self) -> int:
+        return Node.universal_varbitset & ~ (self.fixed_in | self.fixed_out)
 
     def __repr__(self):
         return f"Node({repr(self.fixed_in)}, {repr(self.fixed_out)}, lb={repr(self.lb)})"
     
     def to_dict(self):
         if self.lb != math.inf:
-            return {"fixed_in": [int(i) for i in self.fixed_in], "fixed_out": [int(i) for i in self.fixed_out], "lb": float(self.lb), "coefs": self.coefs}
+            return {"fixed_in": self.fixed_in, "fixed_out": self.fixed_out, "lb": float(self.lb), "coefs": self.coefs}
         else:
-            return {"fixed_in": [int(i) for i in self.fixed_in], "fixed_out": [int(i) for i in self.fixed_out]}
+            return {"fixed_in": self.fixed_in, "fixed_out": self.fixed_out}
         
-    def from_dict(passed_dict):
+    @staticmethod
+    def from_dict(passed_dict: dict):
         return Node(passed_dict["fixed_in"], passed_dict["fixed_out"], lb = passed_dict.get("lb", math.inf), coefs = passed_dict.get("coefs", None))
+    
+    @staticmethod
+    def var_to_varbitset(var: int) -> int:
+        return (1 << var)
+
+    @staticmethod
+    def varbitset_to_list(varbitset: int) -> List:
+        out = []
+        while varbitset:
+            lsb = varbitset & -varbitset
+            out.append(lsb.bit_length() - 1)
+            varbitset &= varbitset - 1
+        return out
+    
+    @staticmethod
+    def iter_to_varbitset(iter: Iterable) -> List:
+        out = 0
+        for i in iter:
+            out += Node.var_to_varbitset(i)
+        return out

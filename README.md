@@ -15,7 +15,7 @@ We have implemented the following categories of initial upper bound heuristics:
 
 We have implemented the following variable choice heuristics:
     1. Coefficient fractionality
-    2. Greedy
+    2. Strong Branching
     3. Random (ordered and pseudorandom)
 
 ## Testing

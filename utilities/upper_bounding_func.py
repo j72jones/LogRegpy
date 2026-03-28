@@ -1,17 +1,16 @@
 from LogRegpy.utilities.problem_data import ProblemData
 from typing import Callable, List, Tuple
+from abc import ABC, abstractmethod
+from LogRegpy.tree.node import Node
 
-
-class UpperBounder:
+class UpperBounder(ABC):
     """
     Template for retrieving an initial UB.
     """
-
+    @abstractmethod
     def __init__(self) -> None:
         pass
 
-    def __call__(self, data: ProblemData) -> Tuple[float, float, list[int]]:
-        pass
-    
-    def _test_func(proposed_func):
+    @abstractmethod
+    def __call__(self) -> Node:
         pass

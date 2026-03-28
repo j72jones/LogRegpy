@@ -1,3 +1,5 @@
+# type: ignore
+
 from enum import Enum
 from ucimlrepo import fetch_ucirepo 
 from sklearn.datasets import make_classification
@@ -32,46 +34,20 @@ uciDatasetsLocal = {
 
 class DatasetCollector():
     def __init__(self):
-        self.X: np.array = None
-        self.y: np.array = None
-        self.Q: np.array = None
-        self.n: int = None
-        self.rows: int = None
+        self.X: np.ndarray
+        self.y: np.ndarray
+        self.Q: np.ndarray
+        self.n: int
+        self.rows: int
     
     def __call__(self, dataset_name: str,
-                 n_samples: Optional[int] = 700,
-                 n_features: Optional[int] = 34,
-                 n_informative: Optional[int] = 5,
-                 n_redundant: Optional[int] = 22,
-                 random_state: Optional[int] = 42) -> bool:
-        if dataset_name == "BANK_MARKETING":
-            # fetch dataset 
-            dataset = fetch_ucirepo(id=uciDatasetsPy[dataset_name].value)
-            # data (as pandas dataframes becomes np.ndarray) 
-            self.X = dataset.data.features[["age", "default", "balance", "housing", "loan", "contact", "day_of_week", "month", "campaign", "pdays", "previous", "poutcome"]]
-            self.X["contact"] = self.X["contact"] == "cellular"
-            print(self.X["poutcome"])
-            self.X["poutcome"] = self.X["poutcome"].apply(lambda x: -1 if pd.isna(x) else 0 if x == 'failure' else 1 if x == "nonexistent" else 2)
-            self.X["default"] = self.X["default"] == "yes"
-            self.X["housing"] = self.X["housing"] == "yes"
-            self.X["loan"] = self.X["loan"] == "yes"
-            self.X["day_of_week"] = self.X["day_of_week"] % 7
-            month_map = {
-                'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4,
-                'may': 5, 'jun': 6, 'jul': 7, 'aug': 8,
-                'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
-            }
-            self.X["month"] = self.X["month"].str.lower().map(month_map)
-            #print(self.X)
-            self.X = self.X.fillna(0).to_numpy()
-            self.y = dataset.data.targets.to_numpy().ravel()
-            unique_vals = np.unique(self.y)
-            if len(unique_vals) != 2:
-                raise ValueError("Expected exactly two unique values")
-            self.y = (self.y == unique_vals[1]).astype(int)
-            self.rows, self.n = self.X.shape
-        
-        elif dataset_name in uciDatasetsPy.__members__:
+                 n_samples: int = 700,
+                 n_features: int = 34,
+                 n_informative: int = 5,
+                 n_redundant: int = 22,
+                 random_state: int = 42) -> bool:
+      
+        if dataset_name in uciDatasetsPy.__members__:
             # fetch dataset 
             dataset = fetch_ucirepo(id=uciDatasetsPy[dataset_name].value)
             # data (as pandas dataframes becomes np.ndarray) 
@@ -82,7 +58,7 @@ class DatasetCollector():
                 self.y = dataset.data.targets.to_numpy().ravel()
             X_mean = np.mean(self.X, axis=0, keepdims=True)
             X_std = np.std(self.X, axis=0, keepdims=True)
-            X_std = np.where(X_std < 1e-6, 1.0, X_std)  # avoid divide-by-zero
+            X_std = np.where(X_std < 1e-8, 1.0, X_std)  # avoid divide-by-zero
             self.X = (self.X - X_mean) / X_std
             unique_vals = np.unique(self.y)
             if len(unique_vals) != 2:
@@ -93,7 +69,15 @@ class DatasetCollector():
                         
         elif dataset_name == "MADELON":
             self.X = np.loadtxt(uciDatasetsLocal[dataset_name]["data_file_path"])
+            X_mean = np.mean(self.X, axis=0, keepdims=True)
+            X_std = np.std(self.X, axis=0, keepdims=True)
+            X_std = np.where(X_std < 1e-8, 1.0, X_std)  # avoid divide-by-zero
+            self.X = (self.X - X_mean) / X_std
             self.y = np.loadtxt(uciDatasetsLocal[dataset_name]["label_file_path"]).ravel()
+            unique_vals = np.unique(self.y)
+            if len(unique_vals) != 2:
+                raise ValueError("Expected exactly two unique values")
+            self.y = (self.y == unique_vals[1]).astype(int)
             self.rows, self.n = self.X.shape
             return True
         
@@ -102,7 +86,7 @@ class DatasetCollector():
             with open(uciDatasetsLocal[dataset_name]["data_file_path"]) as f:
                 for i, line in enumerate(f):
                     indices = list(map(int, line.strip().split()))
-                    X_sparse[i, np.array(indices) - 1] = 1  # adjust for 1-based indexing
+                    X_sparse[i, np.ndarray(indices) - 1] = 1  # adjust for 1-based indexing
             # Convert to CSR for fast arithmetic and row slicing
             self.X = X_sparse.toarray()
             self.y = np.loadtxt(uciDatasetsLocal[dataset_name]["label_file_path"]).ravel()
@@ -115,5 +99,4 @@ class DatasetCollector():
             self.rows, self.n = self.X.shape
             return True
         
-        else:
-            return False
+        return False

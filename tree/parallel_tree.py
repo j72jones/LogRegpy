@@ -1,9 +1,9 @@
 from typing import List, Optional
 from numbers import Number
-from NewLogRegpy.utilities.upper_bounding_func import UpperBounder
-from NewLogRegpy.tests.test_logger import TestLogger
-from NewLogRegpy.tree.node import Node
-from NewLogRegpy.utilities.brancher import Brancher
+from LogRegpy.utilities.upper_bounding_func import UpperBounder
+from LogRegpy.tests.test_logger import TestLogger
+from LogRegpy.tree.node import Node
+from LogRegpy.utilities.brancher import Brancher
 import json
 import math
 import time
@@ -19,8 +19,8 @@ class ParallelTree:
             n: int,
             k: int,
             brancher: Brancher,
-            initial_upper_bound_strategy: UpperBounder = None,
-            test_logger: TestLogger = None
+            initial_upper_bound_strategy: Optional[UpperBounder] = None,
+            test_logger: Optional[TestLogger] = None
             ) -> None:
         self.k: int = k
         self.n: int = n
@@ -34,7 +34,7 @@ class ParallelTree:
         self.UB: float = math.inf
         self.unexplored_internal_nodes: List[Node] = [] # Used as a min-heap via the heapq module
         self.number_infeasible_nodes_explored: int = 0
-        self.best_feasible_node: Node = None
+        self.best_feasible_node: Node = None # type: ignore
         self.number_feasible_nodes_explored: int = 0
         
         ### Research Specific Objects ###
@@ -76,10 +76,10 @@ class ParallelTree:
     
     def solve(self,
               brancher_count: int,
-              eps: Number = 0.0001,
-              timeout: Number = 60,
-              fixed_in_vars: List[int] = None,
-              fixed_out_vars: List[int] = None,
+              eps: float = 0.0001,
+              timeout: int = 60,
+              fixed_in_vars: Optional[List[int]] = None,
+              fixed_out_vars: Optional[List[int]] = None,
               max_iter = 10000,
               safe_close_file = None
               ) -> bool:
@@ -144,27 +144,23 @@ class ParallelTree:
         # Create root node
         root_node: Node = Node(fixed_in_0, fixed_out_0)
         if root_node.is_terminal_leaf():
-            root_node.lb, _ = self.brancher.evaluate_single_node(root_node)
+            root_node.lb = self.brancher.evaluate_single_node(root_node)
             self.UB = root_node.lb
             self.best_feasible_node = root_node
             self.number_feasible_nodes_explored += 1
             self.remaining_tree_size = 0
         else:
-            root_node.lb, _ = self.brancher.evaluate_single_node(root_node)
+            root_node.lb = self.brancher.evaluate_single_node(root_node)
             self.unexplored_internal_nodes.append(root_node)
             self.remaining_tree_size -= 1
         self.LB = root_node.lb
 
         # Try initial upper bounder
-        if self.initial_upper_bounder != None:
-            self.initial_UB, initial_ub_time, ub_fixed_in = self.initial_upper_bounder()
-            self.UB = self.initial_UB
-            initial_ub_node: Node = Node(ub_fixed_in, 0)
-            initial_ub_node.lb = self.initial_UB
-            self.best_feasible_node = initial_ub_node
+        if self.initial_upper_bounder is not None:
+            self.best_feasible_node = self.initial_upper_bounder()
+            self.UB = self.best_feasible_node.lb
             self.number_feasible_nodes_explored += 1
-            self.ub_bound_time += initial_ub_time
-            print("Checking initial upper bound is feasible:", initial_ub_node.is_terminal_leaf())
+            print("Checking initial upper bound is feasible:", self.best_feasible_node.is_terminal_leaf())
             
         # First round of logs
         print(f"Setup complete | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(self.unexplored_internal_nodes)}"
@@ -189,8 +185,7 @@ class ParallelTree:
         print("Timeout greater than loop time:", timeout > (loop_time / 60))
 
         while (self.gap > eps and timeout > (loop_time / 60) and self.num_iter <= max_iter):
-            if (self.gap > eps and len(self.unexplored_internal_nodes) == 0):
-                raise Exception("Node list is empty but GAP is unsatisfactory.")
+            start_iter = self.num_iter
             UB_updated = False
             
             # Send nodes to free branchers
@@ -230,7 +225,7 @@ class ParallelTree:
                                 heapq.heappush(self.unexplored_internal_nodes, node)
                                 self.remaining_tree_size -= 1
                             else:
-                                self.remaining_tree_size -= self._subtree_size(len(node.fixed_in), len(node.fixed_out))
+                                self.remaining_tree_size -= self._subtree_size(node.len_fixed_in, node.len_fixed_out)
                     self.num_iter += data[1][1]
                     self.remaining_tree_size -= data[1][2]
             
@@ -241,7 +236,7 @@ class ParallelTree:
                     if ((self.UB - x.lb)  / self.UB) > eps:
                         unexplored_nodes.append(x)
                     else:
-                        self.remaining_tree_size -= self._subtree_size(len(x.fixed_in), len(x.fixed_out)) - 1
+                        self.remaining_tree_size -= self._subtree_size(x.len_fixed_in, x.len_fixed_out) - 1
                 heapq.heapify(unexplored_nodes)
                 self.unexplored_internal_nodes = unexplored_nodes
             
@@ -250,20 +245,23 @@ class ParallelTree:
                 temp_list = [self.unexplored_internal_nodes[0]] + [brancher_lookup[i][2] for i in range(brancher_count) if brancher_lookup[i][2] is not None]
             else:
                 temp_list = [brancher_lookup[i][2] for i in range(brancher_count) if brancher_lookup[i][2] is not None]
-            if temp_list:
+            if len(temp_list) != 0:
+                print(temp_list, "not empty")
                 self.LB = min(temp_list).lb
             else:
+                print(temp_list, "empty?")
                 self.LB = self.UB
 
             loop_time = time.time() - start_time
 
             if (self.gap > eps and len(temp_list) == 0):
+                print(brancher_lookup)
                 raise Exception("Node list is empty but GAP is unsatisfactory.")
-            
-            print(f"\033[KIteration {self.num_iter} | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(temp_list)}"
-                + f" | Tree Remaining: {self.remaining_tree_size:,} | Running Time: {loop_time:.2f} seconds", end = "\r") 
-            if self.test_logger != None:
-                self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(temp_list), self.remaining_tree_size)
+            if self.num_iter > start_iter:
+                print(f"\033[KIteration {self.num_iter} | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(temp_list)}"
+                    + f" | Tree Remaining: {self.remaining_tree_size:,} | Running Time: {loop_time:.2f} seconds", end = "\r") 
+                if self.test_logger != None:
+                    self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(temp_list), self.remaining_tree_size)
 
         print()
         for i in range(brancher_count):

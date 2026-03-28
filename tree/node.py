@@ -1,6 +1,7 @@
 from typing import List
 import math
-from typing import Optional, Iterable
+from typing import Union, Iterable
+import numpy as np
 
 class Node:
     k: int
@@ -68,14 +69,14 @@ class Node:
         
     @staticmethod
     def from_dict(passed_dict: dict):
-        return Node(passed_dict["fixed_in"], passed_dict["fixed_out"], lb = passed_dict.get("lb", math.inf), coefs = passed_dict.get("coefs", None))
+        return Node(passed_dict["fixed_in"], passed_dict["fixed_out"], lb = passed_dict.get("lb", math.inf), coefs = passed_dict.get("coefs", None)) # type: ignore
     
     @staticmethod
     def var_to_varbitset(var: int) -> int:
         return (1 << var)
 
     @staticmethod
-    def varbitset_to_list(varbitset: int) -> List:
+    def varbitset_to_list(varbitset: int) -> List[int]:
         out = []
         while varbitset:
             lsb = varbitset & -varbitset
@@ -84,7 +85,7 @@ class Node:
         return out
     
     @staticmethod
-    def iter_to_varbitset(iter: Iterable) -> List:
+    def iter_to_varbitset(iter: Iterable) -> int:
         out = 0
         for i in iter:
             out += Node.var_to_varbitset(i)

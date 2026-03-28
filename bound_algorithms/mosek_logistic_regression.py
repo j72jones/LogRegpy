@@ -11,6 +11,7 @@ from mosek import *
 import numpy as np 
 import sys, itertools
 import time
+from typing import Tuple
 
 inf = 0.0
 
@@ -80,7 +81,7 @@ def softplus(task, d, n, theta, t, X, y):
 # X - n x d matrix of data points
 # y - length n vector classifying training points
 # lamb - regularization parameter
-def logisticRegression(X, y, lamb=0.0):
+def logisticRegression(X, y, lamb=0.0) -> Tuple[np.ndarray, float]:
     n, d = int(X.shape[0]), int(X.shape[1])         # num samples, dimension
 
     with Task() as task:
@@ -115,7 +116,7 @@ def logisticRegression(X, y, lamb=0.0):
         # Solution
         task.writedata('logistic.ptf')
         task.optimize()
-        xx = task.getxxslice(soltype.itr, theta, theta+d)
+        xx = np.array(task.getxxslice(soltype.itr, theta, theta+d))
 
         obj_val = task.getprimalobj(soltype.itr)
 

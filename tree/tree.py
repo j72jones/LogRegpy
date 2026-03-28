@@ -17,8 +17,8 @@ class Tree:
             n: int,
             k: int,
             brancher: Brancher,
-            initial_upper_bound_strategy: UpperBounder = None,
-            test_logger: TestLogger = None
+            initial_upper_bound_strategy: Optional[UpperBounder] = None,
+            test_logger: Optional[TestLogger] = None
             ) -> None:
         self.k: int = k
         self.n: int = n
@@ -32,7 +32,7 @@ class Tree:
         self.UB: float = math.inf
         self.unexplored_internal_nodes: List[Node] = []
         self.number_infeasible_nodes_explored: int = 0
-        self.best_feasible_node: Node = None
+        self.best_feasible_node: Node = None # type: ignore
         self.number_feasible_nodes_explored: int = 0
      
         ### Research Specific Objects ###
@@ -73,10 +73,10 @@ class Tree:
         return self.lb_bound_time + self.ub_bound_time
     
     def solve(self,
-              eps: Number = 0.0001,
-              timeout: Number = 60,
-              fixed_in_vars: List[int] = None,
-              fixed_out_vars: List[int] = None,
+              eps: float = 0.0001,
+              timeout: float = 60,
+              fixed_in_vars: Optional[List[int]] = None,
+              fixed_out_vars: Optional[List[int]] = None,
               max_iter = 10000,
               safe_close_file = None
               ) -> bool:
@@ -141,7 +141,7 @@ class Tree:
         # Create root node
         root_node: Node = Node(fixed_in_0, fixed_out_0)
         if root_node.is_terminal_leaf():
-            root_node.lb, _ = self.brancher.evaluate_single_node(root_node)
+            root_node.lb = self.brancher.evaluate_single_node(root_node)
             self.UB = root_node.lb
             self.best_feasible_node = root_node
             self.number_feasible_nodes_explored += 1

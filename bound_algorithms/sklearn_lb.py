@@ -5,9 +5,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 import time
 from numpy import setdiff1d
+import numpy as np
 
-
-class sklearn_lb_eval:
+class SklearnLogisticModel:
     def __init__(self, params: dict):
         self.params = params
         self.model = LogisticRegression(**self.params)
@@ -21,4 +21,18 @@ class sklearn_lb_eval:
         node.coefs = self.model.coef_.flatten()
 
         # Calculate score
-        return log_loss(data.y, self.model.predict_proba(x)), time.time() - start_time
+        return SklearnLogisticModel.logistic_l2_objective(node.coefs, x, data.y, 1/self.params["C"]), time.time() - start_time
+
+    def logistic_l2_objective(theta, X, y, lambda_):
+        """
+        Computes:
+        (1/m) * sum log(1 + exp((1 - 2y_i) x_i^T theta))
+        + (lambda/2) * ||theta||^2
+        """
+        m = X.shape[0]
+
+        z = X @ theta
+        loss = np.logaddexp(0, (1 - 2*y) * z).mean()
+        reg = 0.5 * lambda_ * np.dot(theta, theta)
+
+        return loss + reg

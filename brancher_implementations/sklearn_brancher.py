@@ -11,7 +11,7 @@ from typing import Literal
 class SklearnBrancher(Brancher):
     def __init__(self,
                  data: ProblemData,
-                 method: Literal["fractional_least", "fractional_most", "random"] = "fractional_least",
+                 method: Literal["smallest_coefficient", "fractional_most", "random"] = "smallest_coefficient",
                  solver_params: dict = {"penalty": None, "fit_intercept": False}):
         self.data = data
         Node.k = self.data.k
@@ -19,7 +19,7 @@ class SklearnBrancher(Brancher):
         self.method = method
         self.model = LogisticRegression(**solver_params)
 
-    def __call__(self, node: Node) -> tuple[list[Node], int, int]:
+    def branch_node(self, node: Node) -> tuple[list[Node], int, int]:
         start_time = time.time()
         branch = [] #starts as tuple[Node, int]
         if type(node.coefs) == dict:
@@ -27,30 +27,27 @@ class SklearnBrancher(Brancher):
         else:
             coefs = np.abs(node.coefs)
         branch = []
-        if self.method == "fractional_least":
-            j = 0
-            for i in range(Node.n):
+        if self.method == "smallest_coefficient":
+            branch = []
+            for idx,i in enumerate(Node.varbitset_to_list(Node.universal_varbitset & ~ (node.fixed_out | node.fixed_in))):
                 varbitset = Node.var_to_varbitset(i)
-                if varbitset & node.fixed_out:
-                    if varbitset & node.fixed_in:
-                        if len(branch) < Node.k - node.len_fixed_in:
-                            heapq.heappush(branch, (-np.abs(coefs[j]), varbitset))
-                        elif -np.abs(coefs[j]) < branch[0][0]:
-                            heapq.heapreplace(branch, (-np.abs(coefs[j]), varbitset))
-                    j += 1
-            for i in range(len(branch)):
-                branch[i][0] = Node(node.fixed_in, node.fixed_out | branch[i][1])
-                branch[i][0].lb = self.evaluate_single_node(branch[i][0], prev_coefs=node.coefs)
-            branch.sort()
+                new_node = Node(node.fixed_in, node.fixed_out | varbitset, coefs=node.coefs)
+                new_node.is_terminal_leaf()
+                branch.append((new_node, varbitset, np.abs(coefs[idx])))
+            branch = sorted(branch, reverse=True, key=lambda k: k[2])[:Node.k - node.len_fixed_in]
+            for option in branch:
+                option[0].lb = self.evaluate_single_node(option[0])
             union_varbitset = 0
+            branch.sort()
             for i in range(len(branch)):
                 branch[i][0].fixed_in |= union_varbitset
                 union_varbitset |= branch[i][1]
                 branch[i] = branch[i][0]
             branch.append(Node(node.fixed_in | union_varbitset, 0))
-            if not branch[-1].is_terminal_leaf:
+            if not branch[-1].is_terminal_leaf():
                 raise ValueError(f"Bottom of branch not terminal. Fixed in {Node.varbitset_to_list(branch[-1].fixed_in)}, fixed out: {Node.varbitset_to_list(branch[-1].fixed_out)}")
-            branch[-1].lb = self.evaluate_single_node(branch[-1], prev_coefs=node.coefs)
+            self.evaluate_single_node(branch[-1])
+            # branch[-1] = self.local_search(branch[-1])
         
         elif self.method == "fractional_most":
             j = 0

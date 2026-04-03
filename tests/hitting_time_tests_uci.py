@@ -6,10 +6,8 @@ from pathlib import Path
 from LogRegpy.utilities.problem_data import ProblemData
 from LogRegpy.tree.tree import Tree
 from LogRegpy.tree.node import Node
-from LogRegpy.brancher_implementations.gpu_brancher import GPUBrancher
-from LogRegpy.bound_algorithms.logregpy_cupy_logistic_solvers import parallel_gd2_gpu_kernel, generate_logistic_data
+from LogRegpy.brancher_implementations.sklearn_brancher import SklearnBrancher
 from ucimlrepo import fetch_ucirepo 
-import cupy as cp
 import math
 import time
 
@@ -130,7 +128,7 @@ def run_experiments(time_limit_hours, UCI_list):
     k=3
     unique_vals = []
     while len(unique_vals) != 2 and idx < len(UCI_list):
-        dataset = fetch_ucirepo(id=idx)
+        dataset = fetch_ucirepo(id=UCI_list[idx])
         X = dataset.data.features.fillna(0).to_numpy() # type: ignore
         y = dataset.data.targets.to_numpy().ravel() # type: ignore
         unique_vals = np.unique(y)
@@ -143,21 +141,29 @@ def run_experiments(time_limit_hours, UCI_list):
 
     while time.time() - start_time < time_limit and idx < len(UCI_list):
         
-        print(f"Starting: {idx}: {n},{p},{k}")
+        print(f"Starting: {UCI_list[idx]}: {n},{p},{k}")
 
         # --- run B&B ---
         problem_data = ProblemData(X, y, k)
-        problem_data.X = cp.asarray(problem_data.X, dtype=cp.float32)
-        problem_data.y = cp.asarray(problem_data.y, dtype=cp.float32)
-
+        # problem_data.X = cp.asarray(problem_data.X, dtype=cp.float32)
+        # problem_data.y = cp.asarray(problem_data.y, dtype=cp.float32)
+        C = 1.0 / (lamb * n)
         test_tree = Tree(
             problem_data.n, 
             problem_data.k, 
-            GPUBrancher(problem_data, lamb=lamb),
+            SklearnBrancher(problem_data,
+                            solver_params={
+                                "C": C,
+                                "fit_intercept": False,
+                                "solver": "lbfgs",
+                                "max_iter": 2000,
+                                "tol": 1e-9
+                            }
+                            ),
             )
 
         start_solve_time = time.time()
-        if test_tree.solve(timeout = 17, max_iter = 200000, verbose=False):
+        if test_tree.solve(timeout = 17, max_iter = 200000, verbose=True):
             print(f"Iteration {test_tree.num_iter} | Running Time: {time.time() - start_solve_time:.2f} seconds")
             print(f"Successful test: {idx}: {n},{p},{k}")
         else:
@@ -184,6 +190,17 @@ def run_experiments(time_limit_hours, UCI_list):
 
         if k > p*2/3:
             idx += 1
+            while len(unique_vals) != 2 and idx < len(UCI_list):
+                dataset = fetch_ucirepo(id=UCI_list[idx])
+                X = dataset.data.features.fillna(0).to_numpy() # type: ignore
+                y = dataset.data.targets.to_numpy().ravel() # type: ignore
+                unique_vals = np.unique(y)
+                if len(unique_vals) != 2:
+                    print(f"Too many unique values in this dataset {idx} targets")
+                    idx += 1
+                else:
+                    y = (y == unique_vals[1]).astype(int)
+                    n, p = X.shape
             k = 3
         else:
             k += 1

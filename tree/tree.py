@@ -78,7 +78,8 @@ class Tree:
               fixed_in_vars: Optional[List[int]] = None,
               fixed_out_vars: Optional[List[int]] = None,
               max_iter = 10000,
-              safe_close_file = None
+              safe_close_file = None,
+              verbose = True
               ) -> bool:
         """Enumerate a branch and bound tree to solve the logistic regression problem to global
         optimality using the bounding and objective functions passed into the tree upon its
@@ -161,10 +162,12 @@ class Tree:
             self.best_feasible_node = initial_ub_node
             self.number_feasible_nodes_explored += 1
             self.ub_bound_time += initial_ub_time
-            print("Checking initial upper bound is feasible:", initial_ub_node.is_terminal_leaf())
+            if verbose:
+                print("Checking initial upper bound is feasible:", initial_ub_node.is_terminal_leaf())
             
         # First round of logs
-        print(f"Setup complete | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(self.unexplored_internal_nodes)}"
+        if verbose:
+            print(f"Setup complete | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(self.unexplored_internal_nodes)}"
                 + f" | Tree Remaining: {self.remaining_tree_size:,} | Running Time: {loop_time:.2f} seconds") 
         if self.test_logger != None:
             self.test_logger.log(0, time.time() - start_time, self.UB, self.LB, len(self.unexplored_internal_nodes), self.remaining_tree_size)
@@ -174,8 +177,9 @@ class Tree:
         
         ######### MAIN #########
         
-        print("Gap greater than epsilon:", self.gap > eps)
-        print("Timeout greater than loop time:", timeout > (loop_time / 60))
+        if verbose:
+            print("Gap greater than epsilon:", self.gap > eps)
+            print("Timeout greater than loop time:", timeout > (loop_time / 60))
 
         while (self.gap > eps and timeout > (loop_time / 60) and self.num_iter <= max_iter):
             if (self.gap > eps and len(self.unexplored_internal_nodes) == 0):
@@ -222,14 +226,16 @@ class Tree:
 
             # Log current state
             loop_time = time.time() - start_time
-            print(f"\033[KIteration {self.num_iter} | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(self.unexplored_internal_nodes)}"
+            if verbose:
+                print(f"\033[KIteration {self.num_iter} | UB = {self.UB:.4f} | gap = {self.gap:.4f} | Open Subproblems: {len(self.unexplored_internal_nodes)}"
                 + f" | Tree Remaining: {self.remaining_tree_size:,} | Running Time: {loop_time:.2f} seconds", end = "\r") 
             if self.test_logger != None:
                 self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(self.unexplored_internal_nodes), self.remaining_tree_size)
         
         if (timeout < loop_time / 60) or self.num_iter > max_iter:            
             self._status = "solve timed out."
-            print("\nSolve timed out. Runtime:", time.time() - start_time)
+            if verbose:
+                print("\nSolve timed out. Runtime:", time.time() - start_time)
             if safe_close_file is not None:
                 import json
                 with open(safe_close_file, mode='w') as f:
@@ -246,7 +252,8 @@ class Tree:
         self.solve_time = time.time() - start_time
         if self.test_logger != None:
                 self.test_logger.log(self.num_iter, loop_time, self.UB, self.LB, len(self.unexplored_internal_nodes), self.remaining_tree_size)
-        print("\nFound global optimal. Runtime:", self.solve_time)
+        if verbose:
+            print("\nFound global optimal. Runtime:", self.solve_time)
         return True
     
     def _subtree_size(self, fixed_in_len, fixed_out_len):

@@ -1029,7 +1029,8 @@ def generate_logistic_data(
     rho=0.3,
     beta_scale=1.0,
     corr_type="ar1",
-    seed=None
+    seed=None,
+    rng=None
 ):
     """
     Generate logistic regression data with known sparse support.
@@ -1057,7 +1058,8 @@ def generate_logistic_data(
     beta_true : (n,) ndarray
     support : ndarray of indices
     """
-    rng = np.random.default_rng(seed)
+    if rng is None:
+        rng = np.random.default_rng(seed)
 
     # --- True support ---
     support = np.arange(m)  # first m features are active
@@ -1109,7 +1111,7 @@ if __name__ == '__main__':
     for n in configs["n"]:
         for m in configs["m"]:
             for N in configs["N"]:
-                for run in range(8):
+                for run in range(30):
                     print("Testing:",n,m,N, run)
                     X,y,beta_true, support = generate_logistic_data(N,n,m, rho=0.85, beta_scale=0.5)
                     Node.configure(n=n, k=n)

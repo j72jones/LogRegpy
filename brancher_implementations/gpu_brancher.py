@@ -124,6 +124,7 @@ class GPUBrancher(Brancher):
             warm_start_coefs=prev_coefs,
             epochs = 5000
             )
+        return node.lb
    
     def local_search(self, feasible_node):
         local_nodes = [feasible_node]

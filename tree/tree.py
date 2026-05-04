@@ -79,7 +79,8 @@ class Tree:
               fixed_out_vars: Optional[List[int]] = None,
               max_iter = 10000,
               safe_close_file = None,
-              verbose = True
+              verbose = True,
+              start_time = None
               ) -> bool:
         """Enumerate a branch and bound tree to solve the logistic regression problem to global
         optimality using the bounding and objective functions passed into the tree upon its
@@ -118,7 +119,8 @@ class Tree:
         
         ######### SETUP START #########
         
-        start_time = time.time()
+        if start_time is None:
+            start_time = time.time()
         loop_time = time.time() - start_time
 
         assert isinstance(eps, Number), "eps must be a Number"

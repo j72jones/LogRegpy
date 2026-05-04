@@ -13,7 +13,7 @@ import math
 import time
 
 rng = np.random.default_rng(2)
-lamb=0.1
+lamb=0.001
 
 def sigmoid(z):
     return 1.0 / (1.0 + np.exp(-z))
@@ -99,7 +99,7 @@ def suppressor_scenario(n=1000, p=80):
 def sample_problem(rng):
     while True:
         p = int(rng.integers(30, 80))
-        k = int(rng.integers(3, min(9, p)))
+        k = int(rng.integers(3, min(13, p))) # was set to 9, skewing results
 
         # bias s toward k
         s = max(1, int(rng.normal(loc=0.7 * k, scale=1)))
@@ -178,7 +178,7 @@ def run_experiments(time_limit_hours, rho, beta_scale, corr_type, seed=0):
         ])
 
         if len(results) % 10 == 0:
-            pd.DataFrame(results).to_csv(f"results_{args.corr_type}_rho{args.rho}_beta{args.beta_scale}.csv")
+            pd.DataFrame(results).to_csv(f"results_001_{args.corr_type}_rho{args.rho}_beta{args.beta_scale}.csv")
     return results
 
 import argparse
@@ -199,4 +199,4 @@ results = run_experiments(
 )
 
 # save results
-pd.DataFrame(results).to_csv(f"results_{args.corr_type}_rho{args.rho}_beta{args.beta_scale}.csv")
+pd.DataFrame(results).to_csv(f"results_001_{args.corr_type}_rho{args.rho}_beta{args.beta_scale}.csv")
